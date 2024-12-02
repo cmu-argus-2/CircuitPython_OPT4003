@@ -1,9 +1,9 @@
 """
-CircuitPython driver for the OPT4001 ALS
-    SOT-5X3 variant and PicoStar variant
+CircuitPython driver for the OPT4003 ALS
 
 **Authors**
 Thomas Damiani
+Neil Khera
 
 **Sofware Requirements**
 
@@ -30,27 +30,23 @@ except ImportError:
     pass
 
 # Registers as descirbed in page 25 of datasheet
-RESULT_H        = 0x00
-RESULT_L        = 0x01
-FIFO_0_H        = 0x02
-FIFO_0_L        = 0x03
-FIFO_1_H        = 0x04
-FIFO_1_L        = 0x05
-FIFO_2_H        = 0x06
-FIFO_2_L        = 0x07
+RESULT_MSB_CH0  = 0x00
+RESULT_LSB_CH0  = 0x01
+RESULT_MSB_CH1  = 0x02
+RESULT_LSB_CH1  = 0x03
+FIFO_MSB_CH0    = 0x04
+FIFO_LSB_CH0    = 0x05
+FIFO_MSB_CH1    = 0x06
+FIFO_LSB_CH1    = 0x07
 THRESHOLD_L     = 0x08
 THRESHOLD_H     = 0x09
 CONFIGURATION   = 0x0A
 FLAGS           = 0x0C
 DEVICE_ID       = 0x11
 
-# package type
-SOT_5X3 = 0
-PICOSTAR = 1
-
-class OPT4001:
+class OPT4003:
     """
-    Driver for the OPT4001 ambient light sensor
+    Driver for the OPT4003 ambient light sensor
 
     Positional Arguments
     ++++++++++++++++++++
@@ -88,12 +84,12 @@ class OPT4001:
     +-----------+-----------+-----------+-----------+-----------+
     | 0         | 1         | 2         | 3         | 4         |
     +-----------+-----------+-----------+-----------+-----------+
-    | 459 lux   | 918 lux   | 1.8 klux  | 3.7 klux  | 7.3 klux  |
+    | 561 lux   | 1122 lux  | 2.2 klux  | 4.4 klux  | 8.9 klux  |
     +-----------+-----------+-----------+-----------+-----------+
     +-----------+-----------+-----------+-----------+-----------+
     | 5         | 6         | 7         | 8         | **12**    |
     +-----------+-----------+-----------+-----------+-----------+
-    | 14.7 klux | 29.4 klux | 58.7 klux | 117.4 klux| **auto**  |
+    | 17.9 klux | 35.9 klux | 71.8 klux | 143.6 klux| **auto**  |
     +-----------+-----------+-----------+-----------+-----------+
 
     **conversion_time**
@@ -153,11 +149,6 @@ class OPT4001:
     |fault count | **one**   | two       | four      | eight     |
     +------------+-----------+-----------+-----------+-----------+
 
-    **package**
-
-    what package your ambient sun sensor is using\n
-    **0 - SOT-5x3**\n
-    1 - PicoStar
     """
 
     # Configuration settings
@@ -179,14 +170,13 @@ class OPT4001:
     def __init__(self,
                  i2c_bus: I2C,
                  address: int = 0x44,
-                 package: int = 0,
                  quick_wakeup: bool = False,
                  lux_range: int = 0b1100,
                  conversion_time: int = 0b1000,
                  operating_mode: int = 0b00,
                  latch: bool = True,
                  int_pol: bool = False,
-                 fault_count: int = 0b00) -> "OPT4001":
+                 fault_count: int = 0b00) -> "OPT4003":
 
         self.i2c_device = I2CDevice(i2c_bus, address)
         """
@@ -204,10 +194,10 @@ class OPT4001:
         """
         Lux range: the range which the result will use to return a result\n
         | 0         | 1         | 2         | 3         | 4         | 5         |
-        | 459lux    | 918lux    | 1.8klux   | 3.7klux   | 7.3klux   | 14.7klux  |
+        | 561 lux   | 1122 lux  | 2.2 klux  | 4.4 klux  | 8.9 klux  | 17.9 klux |
 
         | 6         | 7         | 8         | 12        |
-        | 29.4klux  | 58.7klux  | 117.4klux | auto      |
+        | 35.9 klux | 71.8 klux | 143.6 klux| auto      |
         """
 
         self.conversion_time = conversion_time
@@ -251,12 +241,6 @@ class OPT4001:
         1: two faults\n
         2: four faults\n
         3: eight faults\n
-        """
-
-        self.package = package
-        """
-        if your device is Picostar (1) or SOT-5x3 (0)
-
         """
 
         self.buf = bytearray(3)
@@ -311,17 +295,6 @@ class OPT4001:
 
         return result_lsb, counter, crc
 
-    def calc_lux(self, exponent, result_msb, result_lsb) -> float:
-        mantissa = (result_msb << 8) + result_lsb
-        adc_codes = mantissa << exponent
-
-        if self.package == PICOSTAR:
-            lux = adc_codes * 0.0003125
-        if self.package == SOT_5X3:
-            lux = adc_codes * 0.0004375
-
-        return lux
-
     def result_of_addr(self, just_lux) -> list:
         """
         Gets Lux value from the result register. returns lux value as a float.
@@ -340,7 +313,7 @@ class OPT4001:
         15-12: EXPONENT
         11-0: RESULT_MSB
         """
-        exponent, result_msb = self.get_exp_msb(RESULT_H)
+        exponent, result_msb = self.get_exp_msb(RESULT_MSB_CH0)
 
         """
         15-8: RESULT_LSB
@@ -356,39 +329,12 @@ class OPT4001:
         X[2]=XOR(C[3],R[3],R[7],R[11],R[15],R[19],E[3])
         X[3]=XOR(R[3],R[11],R[19])
         """
-        result_lsb, counter, crc = self.get_lsb_counter_crc(RESULT_L)
+        result_lsb, counter, crc = self.get_lsb_counter_crc(RESULT_LSB_CH0)
 
         # equations from pages 17 and 18 of datasheet
         mantissa = (result_msb << 8) + result_lsb
         adc_codes = mantissa << exponent
-        lux = adc_codes * .0004375
-
-        return lux if just_lux else lux, counter, crc
-
-    def read_from_fifo(self, register_high, regist_low, just_lux):
-        """
-        Gets Lux value from sepcified FIFO register. returns lux value as a float.
-        If just_lux is false the counter and crc bits will be added and a tuple of the
-        3 measurements will be returned
-        """
-
-        """
-        15-12: EXPONENT
-        11-0: RESULT_MSB
-        """
-        exponent, result_msb = self.get_exp_msb(register_high)
-
-        """
-        15-8: RESULT_LSB
-        7-4: COUNTER
-        3-0: CRC
-        """
-        result_lsb, counter, crc = self.get_lsb_counter_crc(regist_low)
-
-        # equations from pages 17 and 18 of datasheet
-        mantissa = (result_msb << 8) + result_lsb
-        adc_codes = mantissa << exponent
-        lux = adc_codes * .0004375
+        lux = adc_codes * .000535
 
         return lux if just_lux else lux, counter, crc
 
@@ -403,7 +349,7 @@ class OPT4001:
 
         lux is calculated via:
 
-        lux = (((RESULT_MSB << 8) + RESULT_LSB) << EXPONENT) * 437.5E-6
+        lux = (((RESULT_MSB << 8) + RESULT_LSB) << EXPONENT) * 535E-6
         """
         return self.result_of_addr(True)
 
@@ -434,29 +380,3 @@ class OPT4001:
             XOR ( R[3], R[11], R[19])
         """
         return self.result_of_addr(False)
-
-    def read_lux_FIFO(self, id: Literal[0, 1, 2]) -> float:
-        """
-        Reads just the lux from the FIFO<id> register identically to the lux property. Returns the
-        calculated lux value as a float
-        """
-        channels = {
-            0: (FIFO_0_H, FIFO_0_L),
-            1: (FIFO_1_H, FIFO_1_L),
-            2: (FIFO_2_H, FIFO_2_L)
-        }
-        register_h, register_l = channels[id]
-        return self.read_from_fifo(register_h, register_l, True)
-
-    def read_result_FIFO(self, id: Literal[0, 1, 2]) -> tuple:
-        """
-        Reads the result from the FIFO<id> register identically to the result property. Returns the
-        calculated values as a tuple.
-        """
-        channels = {
-            0: (FIFO_0_H, FIFO_0_L),
-            1: (FIFO_1_H, FIFO_1_L),
-            2: (FIFO_2_H, FIFO_2_L)
-        }
-        register_h, register_l = channels[id]
-        return self.read_from_fifo(register_h, register_l, False)

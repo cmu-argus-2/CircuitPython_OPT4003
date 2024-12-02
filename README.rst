@@ -1,6 +1,6 @@
 Introduction
 ============
-CircuitPython driver for the `OPT4001 Ambient Light Sensor <https://www.ti.com/product/OPT4001>`_
+CircuitPython driver for the `OPT4003 Ambient Light Sensor <https://www.ti.com/product/OPT4003>`_
 
 Dependencies
 ============

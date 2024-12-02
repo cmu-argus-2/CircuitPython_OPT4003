@@ -11,9 +11,9 @@ import sys
 sys.path.insert(0, os.path.abspath('../../environment/lib'))
 sys.path.insert(0, os.path.abspath('../..'))
 
-project = 'CircuitPython OPT4001 driver'
-copyright = '2023, Thomas Damiani'
-author = 'Thomas Damiani'
+project = 'CircuitPython OPT4003 driver'
+copyright = '2024, Neil Khera'
+author = 'Neil Khera'
 release = '0.1.0'
 
 # -- General configuration ---------------------------------------------------
